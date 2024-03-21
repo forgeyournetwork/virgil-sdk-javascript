@@ -1,6 +1,10 @@
-import { IAccessToken, IAccessTokenProvider, ITokenContext } from './interfaces';
-import { GetJwtCallback, Jwt } from '../Jwt';
-import { addSeconds } from '../../Lib/timestamp';
+import {
+	IAccessToken,
+	IAccessTokenProvider,
+	ITokenContext,
+} from "./interfaces";
+import { GetJwtCallback, Jwt } from "../Jwt";
+import { addSeconds } from "../../Lib/timestamp";
 
 const TOKEN_EXPIRATION_MARGIN = 5;
 
@@ -22,28 +26,32 @@ export class CachingJwtProvider implements IAccessTokenProvider {
 	 * @param {Jwt|string} [initialToken] - Optional initial JWT.
 	 */
 	constructor(renewJwtFn: GetJwtCallback, initialToken?: Jwt | string) {
-		if (typeof renewJwtFn !== 'function') {
-			throw new TypeError('`renewJwtFn` must be a function');
+		if (typeof renewJwtFn !== "function") {
+			throw new TypeError("`renewJwtFn` must be a function");
 		}
 
 		if (initialToken) {
 			let jwt;
-			if (typeof initialToken === 'string') {
+			if (typeof initialToken === "string") {
 				jwt = Jwt.fromString(initialToken);
 			} else if (initialToken instanceof Jwt) {
 				jwt = initialToken;
 			} else {
 				throw new Error(
-				`Expected "initialToken" to be a string or an instance of Jwt, got ${
-					typeof initialToken
-				}`);
+					`Expected "initialToken" to be a string or an instance of Jwt, got ${typeof initialToken}`
+				);
 			}
 
 			this.cachedJwt = jwt;
 		}
 
 		this.getJwt = (context: ITokenContext) => {
-			if (this.cachedJwt && !this.cachedJwt.isExpired(addSeconds(new Date, TOKEN_EXPIRATION_MARGIN))) {
+			if (
+				this.cachedJwt &&
+				!this.cachedJwt.isExpired(
+					addSeconds(new Date(), TOKEN_EXPIRATION_MARGIN)
+				)
+			) {
 				return Promise.resolve(this.cachedJwt);
 			}
 
@@ -52,18 +60,32 @@ export class CachingJwtProvider implements IAccessTokenProvider {
 			}
 
 			this.jwtPromise = Promise.resolve(renewJwtFn(context))
-				.then(token => {
-					const jwt = typeof token === 'string' ? Jwt.fromString(token) : token;
+				.then((token) => {
+					const jwt =
+						typeof token === "string"
+							? Jwt.fromString(token)
+							: token;
 					this.cachedJwt = jwt;
 					this.jwtPromise = undefined;
 					return jwt;
-				}).catch(err => {
+				})
+				.catch((err) => {
+					if (typeof err === "string") {
+						try {
+							const jwt = Jwt.fromString(err);
+							this.cachedJwt = jwt;
+							this.jwtPromise = undefined;
+							return jwt;
+						} catch (error) {
+							console.error(error);
+						}
+					}
 					this.jwtPromise = undefined;
 					throw err;
 				});
 
 			return this.jwtPromise;
-		}
+		};
 	}
 
 	/**
